@@ -1,0 +1,63 @@
+name: Bug report
+description: Something is not working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. A few specifics make
+        bugs much easier to track down — please fill in what you can.
+
+  - type: input
+    id: version
+    attributes:
+      label: aiosolax-uart version
+      description: Output of `pip show aiosolax-uart | grep Version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python --version`.
+      placeholder: "3.14.4"
+    validations:
+      required: true
+
+  - type: input
+    id: inverter
+    attributes:
+      label: Inverter model
+      description: From the sticker on the inverter, plus model code from `get_device_info()` if you have it.
+      placeholder: "SolaX X1 Boost (model_code=5000)"
+
+  - type: input
+    id: transport
+    attributes:
+      label: Serial transport
+      description: How are you connecting to the inverter?
+      placeholder: "/dev/ttyUSB0 via FTDI cable, or esphome://10.0.0.5/?port_name=…"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Description of the bug, expected behaviour, and actual behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: A small Python snippet that triggers the issue.
+      render: python
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Logs / traceback
+      description: Run with `logging.basicConfig(level=logging.DEBUG)` if relevant.
+      render: text

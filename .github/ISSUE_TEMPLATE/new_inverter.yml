@@ -1,0 +1,68 @@
+name: Add inverter to MODELS registry
+description: Report a working device-info response so we can add your model
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you've successfully run `aiosolax-uart` against an inverter
+        whose model isn't in the registry yet, share the device-info
+        response and we'll add it.
+
+  - type: input
+    id: model_name
+    attributes:
+      label: Inverter model (from the sticker)
+      placeholder: "X1 Boost 3.0kW"
+    validations:
+      required: true
+
+  - type: input
+    id: model_code
+    attributes:
+      label: Reported `inverter_model_code`
+      description: From `await client.get_device_info()`.
+      placeholder: "5000"
+    validations:
+      required: true
+
+  - type: input
+    id: model_type
+    attributes:
+      label: Reported `inverter_model_type`
+      placeholder: "4"
+
+  - type: dropdown
+    id: family
+    attributes:
+      label: Inverter family
+      options:
+        - X1 grid-tie
+        - X1 Hybrid
+        - X3 grid-tie
+        - X3 Hybrid
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: device_info
+    attributes:
+      label: Full device-info output
+      description: Paste the full `await client.get_device_info()` repr.
+      render: text
+
+  - type: textarea
+    id: live_data
+    attributes:
+      label: Sample live-data response
+      description: Optional — a hex dump of `await client.get_live_data()` helps verify field offsets.
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have removed any personal information (the inverter serial) from the pasted data
+          required: true

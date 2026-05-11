@@ -1,0 +1,164 @@
+name: CLA Assistant
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+# Deny by default; the cla job opts in to exactly what it needs.
+permissions: {}
+
+env:
+  SIGN_PHRASE: I have read the CLA Document and I hereby sign the CLA
+  SIGNATURES_PATH: signatures/version1/cla.json
+  CLA_URL: https://github.com/jesserockz/aiosolax-uart/blob/main/CLA.md
+  # Users whose contributions bypass the CLA gate: project owner + bots
+  # whose PRs are mechanically generated and have no human author to sign.
+  ALLOWLIST: jesserockz,dependabot[bot],github-actions[bot]
+
+jobs:
+  cla:
+    name: Check contributor license agreement
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null) ||
+      github.event_name == 'pull_request_target'
+    permissions:
+      contents: write         # commit signatures to `signatures/version1/cla.json`
+      pull-requests: write    # comment on the PR with the signing prompt
+      statuses: write         # set the CLA status check on the PR head commit
+    steps:
+      - name: Check / record CLA signature
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const SIGN_PHRASE = process.env.SIGN_PHRASE;
+            const SIGNATURES_PATH = process.env.SIGNATURES_PATH;
+            const CLA_URL = process.env.CLA_URL;
+            const ALLOWLIST = new Set(process.env.ALLOWLIST.split(',').map(s => s.trim()));
+            const STATUS_CONTEXT = 'CLA';
+            const { owner, repo } = context.repo;
+
+            // 1. Figure out which PR this run is about, and (if any) the
+            //    comment that may carry a signature.
+            let prNumber;
+            let signingCommenter = null;
+            let signingCommentId = null;
+            if (context.eventName === 'pull_request_target') {
+              prNumber = context.payload.pull_request.number;
+            } else {
+              // issue_comment on a PR — the `if:` filter above ensured this.
+              prNumber = context.payload.issue.number;
+              if ((context.payload.comment.body || '').includes(SIGN_PHRASE)) {
+                signingCommenter = context.payload.comment.user.login;
+                signingCommentId = context.payload.comment.id;
+              } else {
+                core.info('Comment does not contain the sign phrase — exiting.');
+                return;
+              }
+            }
+
+            // 2. Load the PR + every author of every commit on it.
+            const pr = (await github.rest.pulls.get({
+              owner, repo, pull_number: prNumber,
+            })).data;
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              { owner, repo, pull_number: prNumber, per_page: 100 },
+            );
+            const authors = [...new Set(
+              commits.flatMap(c => [c.author?.login, c.committer?.login])
+                .filter(Boolean)
+                .filter(login => !login.endsWith('-bot') || !ALLOWLIST.has(login))
+            )];
+
+            // 3. Load the signatures file from `main`.
+            let sigs = { signedContributors: [] };
+            let sigsSha = null;
+            try {
+              const res = await github.rest.repos.getContent({
+                owner, repo, path: SIGNATURES_PATH, ref: 'main',
+              });
+              sigsSha = res.data.sha;
+              sigs = JSON.parse(Buffer.from(res.data.content, 'base64').toString());
+              if (!Array.isArray(sigs.signedContributors)) {
+                sigs.signedContributors = [];
+              }
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              // First run — file doesn't exist yet. We'll create it on first signature.
+            }
+            const signedNames = new Set(sigs.signedContributors.map(s => s.name));
+
+            // 4. If this run was triggered by a signing comment, append the
+            //    signature and commit the file back to main.
+            if (signingCommenter && !signedNames.has(signingCommenter)
+                && !ALLOWLIST.has(signingCommenter)) {
+              sigs.signedContributors.push({
+                name: signingCommenter,
+                id: context.payload.comment.user.id,
+                comment_id: signingCommentId,
+                pullRequestNo: prNumber,
+                created_at: new Date().toISOString(),
+              });
+              const content = Buffer.from(
+                JSON.stringify(sigs, null, 2) + '\n'
+              ).toString('base64');
+              await github.rest.repos.createOrUpdateFileContents({
+                owner, repo, path: SIGNATURES_PATH,
+                message: `chore: record CLA signature from @${signingCommenter}`,
+                content, branch: 'main',
+                ...(sigsSha ? { sha: sigsSha } : {}),
+              });
+              signedNames.add(signingCommenter);
+              core.info(`Recorded CLA signature for @${signingCommenter}.`);
+            }
+
+            // 5. Compute who still needs to sign.
+            const pending = authors.filter(
+              a => !signedNames.has(a) && !ALLOWLIST.has(a),
+            );
+            const passed = pending.length === 0;
+
+            // 6. Set the commit status on the PR head SHA so the merge gate
+            //    sees the right answer.
+            await github.rest.repos.createCommitStatus({
+              owner, repo, sha: pr.head.sha,
+              state: passed ? 'success' : 'failure',
+              context: STATUS_CONTEXT,
+              description: passed
+                ? 'All authors have signed the CLA.'
+                : `Awaiting CLA signature from: ${pending.join(', ')}`,
+              target_url: CLA_URL,
+            });
+
+            // 7. Comment on the PR asking for signatures, unless we already
+            //    did. (Avoids comment spam on every push to the branch.)
+            if (!passed) {
+              const comments = await github.paginate(
+                github.rest.issues.listComments,
+                { owner, repo, issue_number: prNumber, per_page: 100 },
+              );
+              const alreadyAsked = comments.some(c =>
+                c.user.type === 'Bot' && c.body.includes('CLA Document')
+              );
+              if (!alreadyAsked) {
+                const mentions = pending.map(p => `@${p}`).join(' ');
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber,
+                  body: [
+                    `Hi ${mentions} — thanks for your contribution!`,
+                    '',
+                    'Before we can merge this we need each author of the commits',
+                    `in this PR to sign the [CLA Document](${CLA_URL}).`,
+                    '',
+                    'To sign, just reply to this PR with this exact phrase:',
+                    '',
+                    `> ${SIGN_PHRASE}`,
+                    '',
+                    'You only need to sign once — future PRs from the same GitHub account will pass automatically.',
+                  ].join('\n'),
+                });
+              }
+            }

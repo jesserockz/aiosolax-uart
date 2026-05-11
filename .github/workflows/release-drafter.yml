@@ -1,0 +1,96 @@
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+
+# Deny by default; each job opts in to exactly what it needs.
+permissions: {}
+
+jobs:
+  # Maintain a draft release, calculate the next version, bump pyproject.toml
+  # to match, build a dist for that version, and attach the dist to the
+  # draft. The dist is immutable from this point — the publish workflow
+  # only downloads and re-uploads what's already here.
+  draft:
+    name: Draft release and attach build artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # update the draft release, commit pyproject bump, upload assets
+      pull-requests: read   # release-drafter reads PR labels to resolve the next version
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0  # release-drafter scans full history to find the previous tag
+
+      - name: Update draft release
+        id: drafter
+        uses: release-drafter/release-drafter@c2e2804cc59f45f57076a99af580d0fedb697927  # v7.3.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version in pyproject.toml
+        id: bump
+        env:
+          NEW_VERSION: ${{ steps.drafter.outputs.resolved_version }}
+        run: |
+          if [ -z "${NEW_VERSION}" ]; then
+            echo "No resolved_version produced — nothing to bump."
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CURRENT=$(grep -E '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
+          if [ "${CURRENT}" = "${NEW_VERSION}" ]; then
+            echo "pyproject.toml already at ${NEW_VERSION} — skipping bump."
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Bumping pyproject.toml: ${CURRENT} → ${NEW_VERSION}"
+          sed -i "s/^version = \".*\"$/version = \"${NEW_VERSION}\"/" pyproject.toml
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        if: steps.bump.outputs.bumped == 'true'
+        env:
+          NEW_VERSION: ${{ steps.drafter.outputs.resolved_version }}
+        # GITHUB_TOKEN-authored commits intentionally do not re-trigger
+        # workflows (GitHub Actions safety feature), so there's no infinite
+        # loop concern here.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore: bump version to ${NEW_VERSION}"
+          git push
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Build dist
+        if: steps.drafter.outputs.resolved_version != ''
+        run: uv build
+
+      - name: Replace release assets with freshly built dist
+        if: steps.drafter.outputs.resolved_version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.drafter.outputs.tag_name }}
+        # Wipe every previously attached asset first. `--clobber` on its own
+        # only overwrites files with the same name, so if release-drafter
+        # re-resolved the version (e.g. a patch bump promoted to a minor
+        # bump after a PR was re-labelled), the dist filenames also change
+        # and stale builds would otherwise linger on the draft release.
+        run: |
+          set -euo pipefail
+          if ! existing=$(gh release view "${TAG}" --json assets --jq '.assets[].name'); then
+            echo "Draft release ${TAG} does not exist yet — nothing to clean up."
+            existing=""
+          fi
+          if [ -n "${existing}" ]; then
+            while IFS= read -r asset; do
+              echo "Removing stale asset: ${asset}"
+              gh release delete-asset "${TAG}" "${asset}" --yes
+            done <<< "${existing}"
+          fi
+          gh release upload "${TAG}" dist/*

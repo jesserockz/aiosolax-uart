@@ -1,0 +1,20 @@
+extends: default
+
+ignore: |
+  .venv/
+  dist/
+  build/
+  .pytest_cache/
+
+rules:
+  # GitHub Actions reserves `on:` as the trigger key, which YAML 1.1 parses
+  # as boolean true. The truthy check is useful for *values* but noisy for
+  # this specific key, so we skip key-side checking.
+  truthy:
+    check-keys: false
+  # Workflow files have long action URLs followed by inline why-comments
+  # that comfortably fit a 120-char terminal but exceed the default 80.
+  line-length:
+    max: 120
+  # `---` document markers add noise for our single-document config files.
+  document-start: disable

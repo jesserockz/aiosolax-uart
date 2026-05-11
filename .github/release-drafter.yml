@@ -1,0 +1,70 @@
+# Release Drafter configuration
+# See https://github.com/release-drafter/release-drafter
+
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+# Until the first git tag exists, release-drafter falls back to this version
+# instead of its built-in `1.0.0` default. Subsequent releases derive from
+# the previous tag + version-resolver labels as usual.
+initial-version: "0.1.0"
+
+categories:
+  - title: "💥 Breaking Changes"
+    labels:
+      - "breaking"
+      - "breaking-change"
+  - title: "✨ New Features"
+    labels:
+      - "enhancement"
+      - "feature"
+  - title: "🐛 Bug Fixes"
+    labels:
+      - "bug"
+      - "bugfix"
+      - "fix"
+  - title: "🧰 Maintenance"
+    labels:
+      - "chore"
+      - "refactor"
+  - title: "📦 Dependencies"
+    labels:
+      - "dependencies"
+  - title: "📝 Documentation"
+    labels:
+      - "documentation"
+      - "docs"
+
+# Map label → version bump component.
+version-resolver:
+  major:
+    labels:
+      - "breaking"
+      - "breaking-change"
+  minor:
+    labels:
+      - "enhancement"
+      - "feature"
+  patch:
+    labels:
+      - "bug"
+      - "bugfix"
+      - "fix"
+      - "chore"
+      - "refactor"
+      - "dependencies"
+      - "documentation"
+      - "docs"
+  # Anything unlabeled defaults to a patch bump so accidental "no label" PRs
+  # never block a release.
+  default: patch
+
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: '\<*_&'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

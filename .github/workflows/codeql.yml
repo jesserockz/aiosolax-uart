@@ -1,0 +1,36 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday at 06:00 UTC — catches dependency-driven advisories even
+    # when no new commits land.
+    - cron: "0 6 * * 1"
+
+# Deny by default; the analyze job opts in to exactly what it needs.
+permissions: {}
+
+jobs:
+  analyze:
+    name: Analyze with CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # upload CodeQL SARIF results to the Code Scanning API
+      packages: read          # fetch internal or private CodeQL query packs
+      actions: read           # required by codeql-action when run from a private repo
+      contents: read          # actions/checkout to scan the repository
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@7fd177fa680c9881b53cdab4d346d32574c9f7f4  # v3.35.4
+        with:
+          languages: python
+          queries: security-and-quality
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@7fd177fa680c9881b53cdab4d346d32574c9f7f4  # v3.35.4
+        with:
+          category: "/language:python"

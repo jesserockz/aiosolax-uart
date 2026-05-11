@@ -1,0 +1,73 @@
+[project]
+name = "aiosolax-uart"
+version = "0.1.0"
+description = "Async library to read SolaX inverters over UART using the Pocket USB protocol"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "Jesse Hills", email = "3060199+jesserockz@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "serialx[esphome]>=1.7.0",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Home Automation",
+    "Topic :: System :: Hardware",
+    "Framework :: AsyncIO",
+]
+
+[project.urls]
+Repository = "https://github.com/jesserockz/aiosolax-uart"
+
+[build-system]
+requires = ["uv_build>=0.8.4,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "pytest-cov>=7.0",
+    "pytest-timeout>=2.4.0",
+    "ruff>=0.15.12",
+    "pre-commit>=4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 5
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "RUF", # ruff-specific rules
+    "D",   # pydocstyle
+]
+ignore = [
+    "D203",   # one-blank-line-before-class (conflicts with D211)
+    "D213",   # multi-line-summary-second-line (conflicts with D212)
+    "RUF003", # ambiguous-unicode-character-comment — × is intentional in protocol-decode comments
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]  # tests don't need full docstring coverage
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
