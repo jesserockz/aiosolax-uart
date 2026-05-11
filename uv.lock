@@ -108,7 +108,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "serialx", extras = ["esphome"], specifier = ">=1.7.0" }]
+requires-dist = [{ name = "serialx", extras = ["esphome"], specifier = ">=1.7.2" }]
 
 [package.metadata.requires-dev]
 dev = [
