@@ -15,7 +15,14 @@ env:
   CLA_URL: https://github.com/jesserockz/aiosolax-uart/blob/main/CLA.md
   # Users whose contributions bypass the CLA gate: project owner + bots
   # whose PRs are mechanically generated and have no human author to sign.
-  ALLOWLIST: jesserockz,dependabot[bot],github-actions[bot]
+  # Allowlist for human GitHub accounts that should never be asked to sign the
+  # CLA (the maintainer, plus GitHub's `web-flow` user which authors the merge
+  # commits GitHub produces for UI-driven rebases / "Update branch" clicks on
+  # Dependabot PRs). Bot accounts (anything whose user `type` is `"Bot"` — so
+  # dependabot[bot], github-actions[bot], and the CLA bot itself) are skipped
+  # automatically by the author-type check below, so they don't need to be
+  # listed here.
+  ALLOWLIST: jesserockz,web-flow
 
 jobs:
   cla:
@@ -67,10 +74,18 @@ jobs:
               github.rest.pulls.listCommits,
               { owner, repo, pull_number: prNumber, per_page: 100 },
             );
+            // CLA binds on the AUTHOR of each commit (who wrote the code), not
+            // the committer (whoever applied the commit). For PRs that have
+            // been rebased through the GitHub UI the committer is often
+            // `web-flow` even when the author is e.g. Dependabot — checking
+            // the committer would force web-flow into the pending list every
+            // time. Bot accounts are auto-skipped via the `type === 'Bot'`
+            // check; humans we still want to exempt go in the ALLOWLIST.
             const authors = [...new Set(
-              commits.flatMap(c => [c.author?.login, c.committer?.login])
-                .filter(Boolean)
-                .filter(login => !login.endsWith('-bot') || !ALLOWLIST.has(login))
+              commits
+                .map(c => c.author)
+                .filter(a => a && a.type !== 'Bot')
+                .map(a => a.login)
             )];
 
             // 3. Load the signatures file from `main`.
