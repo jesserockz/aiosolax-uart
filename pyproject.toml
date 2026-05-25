@@ -1,6 +1,6 @@
 [project]
 name = "aiosolax-uart"
-version = "0.1.0"
+version = "0.1.1"
 description = "Async library to read SolaX inverters over UART using the Pocket USB protocol"
 readme = "README.md"
 license = "Apache-2.0"
